@@ -344,6 +344,23 @@ h1 {
   .card { padding: 18px; }
 }
 
+/* In-app video player */
+body.modal-open { overflow: hidden; }
+.player-modal[hidden] { display: none; }
+.player-modal { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.85);
+  display: flex; align-items: center; justify-content: center;
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom)); }
+.player-box { width: 100%; max-width: 960px; background: #0b1220; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,.6); }
+.player-head { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; }
+.player-title { flex: 1; margin: 0; color: #e6edf7; font-weight: 600; font-size: 15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-close { width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255,255,255,.12);
+  color: #fff; font-size: 28px; line-height: 1; cursor: pointer; }
+.player-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; }
+.player-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.player-yt { display: block; text-align: center; padding: 10px; font-size: 13px; color: #8fb3ff; }
+
 </style>
 </head>
 <body>
@@ -382,8 +399,19 @@ h1 {
   </main>
 
   <footer class="site-footer">
-    <p>Curated personal learning guide for navigating H2C-related YouTube videos. Not affiliated with Bambu Lab. Watch buttons open YouTube (needs network).</p>
+    <p>Curated personal learning guide for navigating H2C-related YouTube videos. Not affiliated with Bambu Lab. Videos play in-app via YouTube (needs network).</p>
   </footer>
+
+  <div id="playerModal" class="player-modal" hidden role="dialog" aria-modal="true" aria-label="Video player">
+    <div class="player-box">
+      <div class="player-head">
+        <p id="playerTitle" class="player-title"></p>
+        <button type="button" class="player-close" aria-label="Close video">&times;</button>
+      </div>
+      <div id="playerFrame" class="player-frame"></div>
+      <a id="playerYtLink" class="player-yt" href="#" target="_blank" rel="noopener noreferrer">Open in YouTube app</a>
+    </div>
+  </div>
 
   <script>
 /* Auto-generated from h2c-videos.json — do not invent IDs */
@@ -1124,8 +1152,8 @@ window.H2C_CATEGORY_ORDER = [
           "</p>" +
           '<a class="watch-btn" href="' +
           escapeHtml(v.url) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          "Watch on YouTube" +
+          '" data-url="' + escapeHtml(v.url) + '" data-title="' + escapeHtml(v.appTitle || "") + '">' +
+          "&#9654; Watch" +
           "</a>" +
           "</article>"
         );
@@ -1158,6 +1186,50 @@ window.H2C_CATEGORY_ORDER = [
   });
 
   render();
+
+  // ---- In-app video player ----
+  function ytId(url) {
+    try {
+      var u = new URL(url);
+      if (u.hostname.indexOf("youtu.be") !== -1) return u.pathname.slice(1).split("/")[0];
+      if (u.searchParams.get("v")) return u.searchParams.get("v");
+      var m = u.pathname.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+  var modal = document.getElementById("playerModal");
+  var frameWrap = document.getElementById("playerFrame");
+  var titleEl = document.getElementById("playerTitle");
+  var ytLink = document.getElementById("playerYtLink");
+  var savedScroll = 0;
+  function openPlayer(url, title) {
+    var id = ytId(url);
+    if (!id) { window.open(url, "_blank", "noopener"); return; }
+    savedScroll = window.scrollY;
+    titleEl.textContent = title || "";
+    ytLink.href = url;
+    frameWrap.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id) +
+      '?autoplay=1&playsinline=1&rel=0" title="Video player" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>';
+    modal.hidden = false;
+    document.body.classList.add("modal-open");
+  }
+  function closePlayer() {
+    if (modal.hidden) return;
+    frameWrap.innerHTML = ""; // stops audio
+    modal.hidden = true;
+    document.body.classList.remove("modal-open");
+    window.scrollTo(0, savedScroll);
+  }
+  listEl.addEventListener("click", function (e) {
+    var a = e.target.closest(".watch-btn");
+    if (!a) return;
+    e.preventDefault();
+    openPlayer(a.getAttribute("data-url") || a.href, a.getAttribute("data-title"));
+  });
+  modal.addEventListener("click", function (e) {
+    if (e.target === modal || e.target.closest(".player-close")) closePlayer();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closePlayer(); });
 })();
 
 </script>
